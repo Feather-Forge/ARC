@@ -1,0 +1,1679 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ARC: Alien Planetary Survival</title>
+    <meta charset="utf-8">
+    <style>
+        body {
+            background-color: #111;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            margin: 0 auto;
+            max-width: 800px;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #0f0;
+            margin-bottom: 20px;
+            text-shadow: 0 0 5px #0f0;
+        }
+
+        #game-container {
+            border: 1px solid #0f0;
+            height: 400px;
+            margin-bottom: 20px;
+            overflow-y: auto;
+            padding: 15px;
+            white-space: pre-wrap;
+            background-color: rgba(0, 50, 0, 0.1);
+            box-shadow: inset 0 0 10px rgba(0, 255, 0, 0.2);
+        }
+
+        #health-bar {
+            background-color: #222;
+            border: 1px solid #0f0;
+            height: 20px;
+            margin-bottom: 20px;
+            position: relative;
+            width: 100%;
+        }
+
+        #health-fill {
+            background-color: #0f0;
+            height: 100%;
+            transition: width 0.3s;
+            width: 100%;
+        }
+
+        #health-text {
+            color: #fff;
+            left: 0;
+            position: absolute;
+            text-align: center;
+            top: 0;
+            width: 100%;
+            text-shadow: 0 0 2px #000;
+        }
+
+        #input-area {
+            display: flex;
+            margin-bottom: 15px;
+        }
+
+        #user-input {
+            background-color: #222;
+            border: 1px solid #0f0;
+            color: #0f0;
+            flex-grow: 1;
+            font-family: 'Courier New', monospace;
+            margin-right: 10px;
+            padding: 8px;
+        }
+
+        #submit-btn {
+            background-color: #222;
+            border: 1px solid #0f0;
+            color: #0f0;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            padding: 8px 15px;
+        }
+
+        #submit-btn:hover {
+            background-color: #0f0;
+            color: #000;
+        }
+
+        .status-area {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .stat {
+            border: 1px solid #0f0;
+            flex: 1;
+            margin-right: 10px;
+            padding: 5px;
+            text-align: center;
+            background-color: rgba(0, 50, 0, 0.2);
+        }
+
+        .stat:last-child {
+            margin-right: 0;
+        }
+
+        .health-bar {
+            background-color: #222;
+            height: 10px;
+            margin: 5px 0;
+            width: 100%;
+        }
+
+        .health-fill {
+            background-color: #0f0;
+            height: 100%;
+            width: 100%;
+        }
+
+        .enemy-health {
+            background-color: #f00;
+        }
+
+        .prompt {
+            color: #ff8;
+            font-style: italic;
+            margin: 5px 0;
+        }
+
+        .choice {
+            color: #8ff;
+            margin-left: 10px;
+        }
+
+        .action-button {
+            background-color: #222;
+            border: 1px solid #0f0;
+            color: #0f0;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            margin: 5px 2px;
+            padding: 5px 10px;
+        }
+
+        .action-button:hover {
+            background-color: #0f0;
+            color: #000;
+        }
+
+        #action-buttons {
+            display: none;
+            margin: 10px 0;
+        }
+
+        .narrator {
+            color: #0f0;
+        }
+
+        .arc {
+            color: #0ff;
+            font-weight: bold;
+        }
+
+        .npc {
+            color: #ff0;
+        }
+
+        .player {
+            color: #f0f;
+        }
+
+        .system {
+            color: #f88;
+        }
+
+        .battle {
+            color: #f44;
+        }
+
+        .section {
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+<h1>ARC: Alien Planetary Survival</h1>
+
+<div class="status-area">
+    <div class="stat">Level: <span id="level">1</span></div>
+    <div class="stat">XP: <span id="xp">0</span>/<span id="xp-next">50</span></div>
+    <div class="stat">Gold: <span id="gold">0</span></div>
+</div>
+
+<div id="health-bar">
+    <div id="health-fill"></div>
+    <div id="health-text">Health: 100/100</div>
+</div>
+
+<div id="game-container"></div>
+
+<div id="action-buttons"></div>
+
+<div id="input-area">
+    <input type="text" id="user-input" placeholder="Type your choice or press ENTER to continue..." />
+    <button id="submit-btn">Submit</button>
+</div>
+
+<script>
+    // DOM elements
+    const gameContainer = document.getElementById('game-container');
+    const userInput = document.getElementById('user-input');
+    const submitBtn = document.getElementById('submit-btn');
+    const healthFill = document.getElementById('health-fill');
+    const healthText = document.getElementById('health-text');
+    const levelDisplay = document.getElementById('level');
+    const xpDisplay = document.getElementById('xp');
+    const xpNextDisplay = document.getElementById('xp-next');
+    const goldDisplay = document.getElementById('gold');
+    const actionButtons = document.getElementById('action-buttons');
+
+    // Game state
+    const gameState = {
+        // Dialog management
+        dialogSections: [],
+        awaitingContinue: false,
+
+        // Player stats
+        playerHealth: 100,
+        maxHealth: 100,
+        playerLevel: 1,
+        playerMoney: 0,
+        baseDamage: 10,
+        playerItems: {},
+
+        xp: 0,
+        xpToNext: 50,
+        alienReputation: 0,
+        killCount: 0,
+        aliensDefeated: 0,
+
+        weaponName: "fists",
+        weaponDamage: 5,
+        weaponTrait: null,
+
+        // Story flags
+        didSalvage: false,
+        visitedTown: false,
+        spokeToVillager: false,
+        foughtPatrol: false,
+        wentToShop: false,
+        heardExplosion: false,
+        defeatedGuardian: false,
+        defeatedOvermind: false,
+
+        questLostChildStarted: false,
+        questLostChildCompleted: false,
+        questMerchantDebtStarted: false,
+        questMerchantDebtCompleted: false,
+
+        loreLog: [],
+
+        // Battle state
+        inBattle: false,
+        currentEnemy: null,
+        enemyHealth: 0,
+        enemyMaxHealth: 0,
+        enemyDamage: 0,
+        battleXpReward: 0,
+        battleRepEffect: 0,
+        enemyType: "",
+        stunnedEnemy: false,
+
+        // Random functions (similar to Python random)
+        random: function() {
+            return Math.random();
+        },
+
+        randint: function(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        },
+
+        choice: function(array) {
+            return array[Math.floor(Math.random() * array.length)];
+        }
+    };
+
+    // Game state management
+    function updateHealthDisplay() {
+        const percentage = (gameState.playerHealth / gameState.maxHealth) * 100;
+        healthFill.style.width = `${percentage}%`;
+        healthText.textContent = `Health: ${gameState.playerHealth}/${gameState.maxHealth}`;
+    }
+
+    function updateStatsDisplay() {
+        levelDisplay.textContent = gameState.playerLevel;
+        xpDisplay.textContent = gameState.xp;
+        xpNextDisplay.textContent = gameState.xpToNext;
+        goldDisplay.textContent = gameState.playerMoney;
+    }
+
+    // Game output
+    function printSection(lines, classNames) {
+        const sectionDiv = document.createElement('div');
+        sectionDiv.className = 'section';
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const className = classNames[i] || '';
+
+            const lineDiv = document.createElement('div');
+            if (className) lineDiv.className = className;
+            lineDiv.textContent = line;
+            sectionDiv.appendChild(lineDiv);
+        }
+
+        gameContainer.appendChild(sectionDiv);
+        gameContainer.scrollTop = gameContainer.scrollHeight;
+    }
+
+    function queueDialogSection(sections) {
+        gameState.dialogSections = gameState.dialogSections.concat(sections);
+
+        if (!gameState.awaitingContinue) {
+            processNextSection();
+        }
+    }
+
+    function processNextSection() {
+        if (gameState.dialogSections.length > 0) {
+            const section = gameState.dialogSections.shift();
+            printSection(section.lines, section.classes);
+
+            gameState.awaitingContinue = true;
+
+            // Show "Press Enter to continue" prompt if more dialog is queued
+            if (gameState.dialogSections.length > 0) {
+                printSection(['\n[Press ENTER to continue]'], ['prompt']);
+            }
+        } else {
+            gameState.awaitingContinue = false;
+        }
+    }
+
+    function printChoices(choices) {
+        const lines = ['\n'];
+        const classes = [''];
+
+        choices.forEach(choice => {
+            lines.push(`  [${choice.key}] ${choice.text}`);
+            classes.push('choice');
+        });
+
+        printSection(lines, classes);
+    }
+
+    function showActionButtons(actions) {
+        actionButtons.innerHTML = '';
+        actions.forEach(action => {
+            const btn = document.createElement('button');
+            btn.textContent = action.text;
+            btn.className = 'action-button';
+            btn.onclick = () => processInput(action.key);
+            actionButtons.appendChild(btn);
+        });
+        actionButtons.style.display = 'block';
+    }
+
+    function hideActionButtons() {
+        actionButtons.style.display = 'none';
+    }
+
+    function createHealthBar(current, max, length = 20) {
+        if (max <= 0) max = 1;
+        if (current < 0) current = 0;
+
+        const ratio = current / max;
+        const filled = Math.floor(ratio * length);
+        const empty = length - filled;
+
+        return `[${'#'.repeat(filled)}${'-'.repeat(empty)}] ${current}/${max}`;
+    }
+
+    function calculatePlayerDamage() {
+        // Base + weapon + level scaling
+        const base = gameState.baseDamage + gameState.weaponDamage + gameState.playerLevel;
+        let dmg = gameState.randint(Math.floor(base * 0.8), Math.floor(base * 1.2));
+
+        // Weapon traits
+        let traitText = "";
+        if (gameState.weaponTrait === "crit") {
+            if (gameState.random() < 0.25) {
+                dmg = Math.floor(dmg * 1.8);
+                traitText = " (CRITICAL)";
+            }
+        } else if (gameState.weaponTrait === "double_hit") {
+            if (gameState.random() < 0.30) {
+                const extra = gameState.randint(Math.floor(base * 0.5), Math.floor(base * 0.8));
+                dmg += extra;
+                traitText = " (DOUBLE HIT)";
+            }
+        } else if (gameState.weaponTrait === "armor_pierce") {
+            traitText = " (ARMOR-PIERCING)";
+        } else if (gameState.weaponTrait === "stun") {
+            traitText = " (IMPACT)";
+        }
+
+        return { damage: dmg, traitText: traitText };
+    }
+
+    function gainXp(amount) {
+        gameState.xp += amount;
+
+        queueDialogSection([
+            {
+                lines: [`[ARC] Experience gained: ${amount}. Total XP: ${gameState.xp}/${gameState.xpToNext}.`],
+                classes: ['arc']
+            }
+        ]);
+
+        while (gameState.xp >= gameState.xpToNext) {
+            levelUp();
+        }
+
+        updateStatsDisplay();
+    }
+
+    function levelUp() {
+        gameState.xp -= gameState.xpToNext;
+        gameState.playerLevel += 1;
+        gameState.xpToNext = Math.floor(gameState.xpToNext * 1.5);
+        gameState.maxHealth += 10;
+        gameState.playerHealth = gameState.maxHealth;
+        gameState.baseDamage += 3;
+
+        queueDialogSection([
+            {
+                lines: [
+                    "\n=== LEVEL UP! ===",
+                    `[ARC] Level ${gameState.playerLevel} reached.`,
+                    `Max health increased to ${gameState.maxHealth}. Base damage increased to ${gameState.baseDamage}.`
+                ],
+                classes: ['system', 'arc', 'arc']
+            }
+        ]);
+
+        updateHealthDisplay();
+        updateStatsDisplay();
+    }
+
+    function useItem(itemName) {
+        for (const [key, value] of Object.entries(gameState.playerItems)) {
+            if (value.toLowerCase() === itemName.toLowerCase()) {
+                if (key === "boost") { // med pack
+                    const healAmount = 40;
+                    gameState.playerHealth += healAmount;
+                    if (gameState.playerHealth > gameState.maxHealth) {
+                        gameState.playerHealth = gameState.maxHealth;
+                    }
+
+                    queueDialogSection([
+                        {
+                            lines: [`\n[ARC] Vital signs stabilizing. Health restored to ${gameState.playerHealth}.`],
+                            classes: ['arc']
+                        }
+                    ]);
+
+                    updateHealthDisplay();
+                } else if (key === "damage_potion") {
+                    queueDialogSection([
+                        {
+                            lines: ["\n[ARC] Combat stimulant engaged. Attack routines temporarily boosted."],
+                            classes: ['arc']
+                        }
+                    ]);
+                }
+
+                if (key !== "weapon") {
+                    delete gameState.playerItems[key];
+
+                    printSection(
+                        [`The item '${itemName}' has been used and removed from your inventory.`],
+                        ['narrator']
+                    );
+                } else {
+                    printSection(
+                        [`The item '${itemName}' is your weapon and will not be removed.`],
+                        ['narrator']
+                    );
+                }
+                return true;
+            }
+        }
+
+        printSection(
+            ["[ARC] Item not found in inventory."],
+            ['arc']
+        );
+        return false;
+    }
+
+    function playerSpecialAbility(enemyName) {
+        if (gameState.playerHealth <= 15) {
+            printSection(
+                ["[ARC] Not enough vitality to sustain overcharge."],
+                ['arc']
+            );
+            return { damage: 0, tag: "" };
+        }
+
+        gameState.playerHealth -= 15;
+        updateHealthDisplay();
+
+        const base = gameState.baseDamage + gameState.weaponDamage + gameState.playerLevel * 2;
+        const dmg = gameState.randint(Math.floor(base * 1.5), Math.floor(base * 2.2));
+
+        queueDialogSection([
+            {
+                lines: [
+                    `\nYou channel raw energy through your ${gameState.weaponName}, your body screaming in protest.`,
+                    `The blast tears into the ${enemyName}!`
+                ],
+                classes: ['narrator', 'battle']
+            }
+        ]);
+
+        return { damage: dmg, tag: " (OVERCHARGE)" };
+    }
+
+    // Battle mechanics
+    function startBattle(enemy, enemyType, enemyDamage, enemyHealth, xpReward, repEffect) {
+        gameState.inBattle = true;
+        gameState.currentEnemy = enemy;
+        gameState.enemyHealth = enemyHealth;
+        gameState.enemyMaxHealth = enemyHealth;
+        gameState.enemyDamage = enemyDamage;
+        gameState.battleXpReward = xpReward;
+        gameState.battleRepEffect = repEffect;
+        gameState.enemyType = enemyType;
+        gameState.stunnedEnemy = false;
+
+        queueDialogSection([
+            {
+                lines: [`\nA ${enemy} emerges...`],
+                classes: ['battle']
+            }
+        ]);
+
+        return battleTurn;
+    }
+
+    function battleTurn(choice) {
+        if (!gameState.inBattle) return null;
+
+        if (gameState.playerHealth <= 0) {
+            return scenes.deathEnding;
+        }
+
+        queueDialogSection([
+            {
+                lines: [
+                    "\n--- BATTLE ---",
+                    "Your Health:",
+                    createHealthBar(gameState.playerHealth, gameState.maxHealth),
+                    `${gameState.currentEnemy} Health:`,
+                    createHealthBar(gameState.enemyHealth, gameState.enemyMaxHealth)
+                ],
+                classes: ['battle', 'narrator', 'narrator', 'battle', 'battle']
+            }
+        ]);
+
+        if (!choice) {
+            // First turn or need input
+            printChoices([
+                { key: 'w', text: `Attack with ${gameState.weaponName}` },
+                { key: 'i', text: 'Use item' },
+                { key: 'o', text: 'Use OVERCHARGE ability (costs 15 HP)' },
+                { key: 'r', text: 'Risky dodge' }
+            ]);
+
+            // Also show as buttons
+            showActionButtons([
+                { key: 'w', text: `Attack with ${gameState.weaponName}` },
+                { key: 'i', text: 'Use item' },
+                { key: 'o', text: 'OVERCHARGE' },
+                { key: 'r', text: 'Dodge' }
+            ]);
+
+            return battleTurn;
+        }
+
+        hideActionButtons();
+
+        // Player's turn
+        let dodgeSuccess = false;
+
+        if (choice === 'w') {
+            const attack = calculatePlayerDamage();
+
+            queueDialogSection([
+                {
+                    lines: [`\nYou strike with your ${gameState.weaponName}${attack.traitText} for ${attack.damage} damage!`],
+                    classes: ['battle']
+                }
+            ]);
+
+            gameState.enemyHealth -= attack.damage;
+        } else if (choice === 'i') {
+            const inventoryLines = ["\nYour inventory contains:"];
+            const inventoryClasses = ['narrator'];
+
+            if (Object.keys(gameState.playerItems).length === 0) {
+                inventoryLines.push("  (Empty)");
+                inventoryClasses.push('narrator');
+            } else {
+                for (const [key, value] of Object.entries(gameState.playerItems)) {
+                    inventoryLines.push(`- ${value}`);
+                    inventoryClasses.push('narrator');
+                }
+            }
+
+            inventoryLines.push("Enter the name of the item to use:");
+            inventoryClasses.push('prompt');
+
+            printSection(inventoryLines, inventoryClasses);
+
+            return function(itemName) {
+                useItem(itemName);
+                return battleTurn('');
+            };
+        } else if (choice === 'o') {
+            queueDialogSection([
+                {
+                    lines: ["\n[ARC] Overcharge protocol available."],
+                    classes: ['arc']
+                }
+            ]);
+
+            const overcharge = playerSpecialAbility(gameState.currentEnemy);
+            if (overcharge.damage > 0) {
+                gameState.enemyHealth -= overcharge.damage;
+
+                queueDialogSection([
+                    {
+                        lines: [`You dealt ${overcharge.damage} damage${overcharge.tag}!`],
+                        classes: ['battle']
+                    }
+                ]);
+            }
+        } else if (choice === 'r') {
+            queueDialogSection([
+                {
+                    lines: ["\nYou prepare to dodge the next attack, lowering your stance."],
+                    classes: ['narrator']
+                }
+            ]);
+
+            dodgeSuccess = gameState.random() < 0.6;
+        } else {
+            queueDialogSection([
+                {
+                    lines: ["\nYou hesitate, muscles locked. The enemy doesn't."],
+                    classes: ['narrator']
+                }
+            ]);
+        }
+
+        // Check if enemy is defeated
+        if (gameState.enemyHealth <= 0) {
+            queueDialogSection([
+                {
+                    lines: [`\nThe ${gameState.currentEnemy} collapses, defeated.`],
+                    classes: ['battle']
+                }
+            ]);
+
+            gainXp(gameState.battleXpReward);
+            gameState.killCount += 1;
+
+            if (gameState.enemyType === "alien") {
+                gameState.aliensDefeated += 1;
+                gameState.alienReputation -= gameState.battleRepEffect;
+            }
+
+            gameState.inBattle = false;
+
+            // Return to appropriate scene based on enemy
+            if (gameState.currentEnemy === "Alien Patrol") {
+                return scenes.explosionSegment;
+            } else if (gameState.currentEnemy === "Alien Guardian") {
+                gameState.defeatedGuardian = true;
+                return scenes.caveSegmentPart2;
+            } else if (gameState.currentEnemy === "Alien Overmind") {
+                gameState.defeatedOvermind = true;
+                return scenes.finalChoice;
+            } else if (gameState.currentEnemy === "Alien Drone") {
+                // Random encounter, go back to previous scene
+                if (gameState.didSalvage && !gameState.visitedTown) {
+                    return scenes.townIntroSegment;
+                } else {
+                    return scenes.currentScene;
+                }
+            }
+        }
+
+        // Enemy turn
+        if (gameState.stunnedEnemy) {
+            queueDialogSection([
+                {
+                    lines: [`\nThe ${gameState.currentEnemy} is stunned and cannot attack!`],
+                    classes: ['battle']
+                }
+            ]);
+
+            gameState.stunnedEnemy = false;
+        } else {
+            if (choice === 'r' && dodgeSuccess) {
+                queueDialogSection([
+                    {
+                        lines: [`The ${gameState.currentEnemy} strikes, but you slip out of the way just in time!`],
+                        classes: ['battle']
+                    }
+                ]);
+            } else {
+                // Enemy attack with some randomness
+                if (gameState.enemyType === "alien" && gameState.random() < 0.2) {
+                    const actualEnemyDamage = gameState.randint(
+                        Math.floor(gameState.enemyDamage * 1.3),
+                        Math.floor(gameState.enemyDamage * 1.8)
+                    );
+
+                    queueDialogSection([
+                        {
+                            lines: [`\nThe ${gameState.currentEnemy} channels a surge of alien energy and strikes HARD for ${actualEnemyDamage} damage!`],
+                            classes: ['battle']
+                        }
+                    ]);
+
+                    gameState.playerHealth -= actualEnemyDamage;
+                } else {
+                    const actualEnemyDamage = gameState.randint(
+                        Math.floor(gameState.enemyDamage * 0.7),
+                        Math.floor(gameState.enemyDamage * 1.2)
+                    );
+
+                    queueDialogSection([
+                        {
+                            lines: [`\nThe ${gameState.currentEnemy} hits you for ${actualEnemyDamage} damage.`],
+                            classes: ['battle']
+                        }
+                    ]);
+
+                    gameState.playerHealth -= actualEnemyDamage;
+                }
+
+                updateHealthDisplay();
+            }
+        }
+
+        // Check for weapon trait effects
+        if (gameState.weaponTrait === "stun" && gameState.random() < 0.2) {
+            queueDialogSection([
+                {
+                    lines: [`\nYour ${gameState.weaponName} crackles, and the ${gameState.currentEnemy} reels, stunned!`],
+                    classes: ['battle']
+                }
+            ]);
+
+            gameState.stunnedEnemy = true;
+        }
+
+        // Check player health
+        if (gameState.playerHealth <= 0) {
+            return scenes.deathEnding;
+        }
+
+        // Continue battle
+        return battleTurn;
+    }
+
+    // Random events
+    function randomChance(typeOfEnemy) {
+        const chance = gameState.choice([typeOfEnemy, "Gold", "None"]);
+
+        if (chance === typeOfEnemy) {
+            if (typeOfEnemy === "alien drone") {
+                return startBattle("Alien Drone", "alien", 8, 25, 20, 2);
+            } else if (typeOfEnemy === "alien patrol") {
+                return startBattle("Alien Patrol", "alien", 18, 60, 40, 4);
+            } else if (typeOfEnemy === "alien monster") {
+                return startBattle("Alien Beast", "alien", 25, 80, 60, 5);
+            }
+        } else if (chance === "Gold") {
+            const found = gameState.randint(50, 150);
+            gameState.playerMoney += found;
+
+            queueDialogSection([
+                {
+                    lines: [
+                        "\nYou stumble over something buried in the dirt.",
+                        `You found ${found} gold. You now have ${gameState.playerMoney} gold.`
+                    ],
+                    classes: ['narrator', 'narrator']
+                }
+            ]);
+
+            updateStatsDisplay();
+        }
+
+        // Continue with current scene
+        return scenes.currentScene;
+    }
+
+    // Game scenes
+    const scenes = {
+        currentScene: null,
+
+        intro: function() {
+            queueDialogSection([
+                {
+                    lines: [
+                        "[ARC] Simulation initialized. Planetary survival scenario loaded.",
+                        "You awaken in the wreckage of your crashed ship. Emergency systems have",
+                        "kept you alive, but you're stranded on an alien planet.",
+                        "In the distance, you can see what appears to be a settlement."
+                    ],
+                    classes: ['arc', 'narrator', 'narrator', 'narrator']
+                }
+            ]);
+
+            scenes.currentScene = scenes.initialChoice;
+            return scenes.initialChoice;
+        },
+
+        initialChoice: function() {
+            queueDialogSection([
+                {
+                    lines: ["\n[ARC] Initial objective selection:"],
+                    classes: ['arc']
+                }
+            ]);
+
+            printChoices([
+                { key: 's', text: 'Salvage what you can from the crashed ship' },
+                { key: 'w', text: 'Leave the wreck and head toward the town' }
+            ]);
+
+            // Also show as buttons
+            showActionButtons([
+                { key: 's', text: 'Salvage ship' },
+                { key: 'w', text: 'Head to town' }
+            ]);
+
+            return function(choice) {
+                hideActionButtons();
+                if (choice === 's') {
+                    scenes.currentScene = scenes.salvageSegment;
+                    return scenes.salvageSegment();
+                } else if (choice === 'w') {
+                    scenes.currentScene = scenes.townIntroSegment;
+                    return scenes.townIntroSegment();
+                } else {
+                    queueDialogSection([
+                        {
+                            lines: ["[ARC] Invalid input. Try again."],
+                            classes: ['arc']
+                        }
+                    ]);
+                    return scenes.initialChoice;
+                }
+            };
+        },
+
+        salvageSegment: function() {
+            gameState.didSalvage = true;
+            queueDialogSection([
+                {
+                    lines: ["\nYou pick your way across twisted metal and sparking wires toward the wrecked ship."],
+                    classes: ['narrator']
+                }
+            ]);
+
+            // Random chance of explosion (10%)
+            const luck = gameState.randint(1, 10);
+            if (luck === 10) {
+                queueDialogSection([
+                    {
+                        lines: [
+                            "\nThe ship gives a horrible metallic shriek.",
+                            "ARC: Wait. That energy surge—",
+                            "BOOOOOOOOM!",
+                            "The world becomes fire, then nothing."
+                        ],
+                        classes: ['narrator', 'arc', 'system', 'narrator']
+                    }
+                ]);
+
+                return scenes.startDeathEnding;
+            }
+
+            if (luck % 2 === 0) {
+                queueDialogSection([
+                    {
+                        lines: [
+                            "\nInside the half-melted cargo bay, you find a med pack and a battered laser pistol.",
+                            `[ARC] Weapon acquired: laser pistol. Trait: high critical chance.`
+                        ],
+                        classes: ['narrator', 'arc']
+                    }
+                ]);
+
+                gameState.playerItems["boost"] = "med pack";
+                gameState.playerItems["weapon"] = "laser pistol";
+                gameState.weaponName = "laser pistol";
+                gameState.weaponDamage = 15;
+                gameState.weaponTrait = "crit";
+
+                scenes.currentScene = scenes.salvageSegment;
+                return randomChance("alien drone");
+            } else {
+                queueDialogSection([
+                    {
+                        lines: [
+                            "\nYou sift through charred crates and shattered panels.",
+                            "Behind a scorched console, you find a pouch of coins and a compact ion rifle.",
+                            `You collect 100 gold. Total: ${gameState.playerMoney + 100}.`,
+                            `[ARC] Weapon acquired: ion rifle. Trait: stun chance.`
+                        ],
+                        classes: ['narrator', 'narrator', 'narrator', 'arc']
+                    }
+                ]);
+
+                const foundGold = 100;
+                gameState.playerMoney += foundGold;
+                gameState.playerItems["weapon"] = "ion rifle";
+                gameState.weaponName = "ion rifle";
+                gameState.weaponDamage = 18;
+                gameState.weaponTrait = "stun";
+                updateStatsDisplay();
+
+                scenes.currentScene = scenes.salvageSegment;
+                return randomChance("alien drone");
+            }
+
+            queueDialogSection([
+                {
+                    lines: ["\nWith nothing more to salvage, you turn toward the distant town."],
+                    classes: ['narrator']
+                }
+            ]);
+
+            return scenes.townIntroSegment;
+        },
+
+        townIntroSegment: function() {
+            gameState.visitedTown = true;
+            queueDialogSection([
+                {
+                    lines: [
+                        "\nYou follow a cracked, shimmering road toward a cluster of strange buildings on the horizon.",
+                        "The town is a patchwork of alien tech and human architecture, fused together like a bad memory.",
+                        "You see a villager, eyes wary, watching the sky."
+                    ],
+                    classes: ['narrator', 'narrator', 'narrator']
+                },
+                {
+                    lines: [
+                        "Villager: You don't look like one of them. Good.",
+                        "Villager: Aliens have been running this place for ages.",
+                        "Villager: Some of us still resist. Quietly.",
+                        "\nVillager: My son, Iro, ran off toward the old water tower near the outskirts.",
+                        "Villager: If you see him... just bring him back. Please."
+                    ],
+                    classes: ['npc', 'npc', 'npc', 'npc', 'npc']
+                }
+            ]);
+
+            gameState.spokeToVillager = true;
+            gameState.questLostChildStarted = true;
+
+            scenes.currentScene = scenes.lostChildQuest;
+            return scenes.lostChildQuest();
+        },
+
+        lostChildQuest: function() {
+            if (!gameState.questLostChildStarted || gameState.questLostChildCompleted) {
+                return scenes.townPatrolSegment();
+            }
+
+            queueDialogSection([
+                {
+                    lines: [
+                        "\nNear the rusted water tower, you hear quiet sobbing.",
+                        "A small boy huddles behind a broken pipe, staring at the sky.",
+                        "\n[ARC] Emotional subroutine triggered. Proceed carefully."
+                    ],
+                    classes: ['narrator', 'narrator', 'arc']
+                }
+            ]);
+
+            printChoices([
+                { key: 'c', text: 'Call out gently' },
+                { key: 's', text: 'Sneak closer quietly' }
+            ]);
+
+            // Also show as buttons
+            showActionButtons([
+                { key: 'c', text: 'Call out' },
+                { key: 's', text: 'Sneak closer' }
+            ]);
+
+            return function(choice) {
+                hideActionButtons();
+                if (choice === 'c') {
+                    queueDialogSection([
+                        {
+                            lines: [
+                                "\nYou: Hey. Your mom sent me. She's worried about you.",
+                                "Boy: The aliens... they took Dad. I thought I could see their base from here."
+                            ],
+                            classes: ['player', 'npc']
+                        }
+                    ]);
+                } else if (choice === 's') {
+                    queueDialogSection([
+                        {
+                            lines: [
+                                "\nYou step closer, the metal creaking under your weight.",
+                                "The boy startles, but relaxes when he sees you aren't an alien soldier."
+                            ],
+                            classes: ['narrator', 'narrator']
+                        }
+                    ]);
+                } else {
+                    queueDialogSection([
+                        {
+                            lines: ["[ARC] Invalid input. Try again."],
+                            classes: ['arc']
+                        }
+                    ]);
+                    return scenes.lostChildQuest;
+                }
+
+                queueDialogSection([
+                    {
+                        lines: [
+                            "\nYou promise to walk him back to the town, keeping an eye on the sky as you go.",
+                            "\nThe villager thanks you with shaking hands and presses 50 gold into your palm.",
+                            `[ARC] Side objective complete. Gold increased to ${gameState.playerMoney + 50}.`
+                        ],
+                        classes: ['narrator', 'narrator', 'arc']
+                    }
+                ]);
+
+                gameState.questLostChildCompleted = true;
+                gameState.playerMoney += 50;
+                updateStatsDisplay();
+                gainXp(30);
+
+                scenes.currentScene = scenes.townPatrolSegment;
+                return scenes.townPatrolSegment();
+            };
+        },
+
+        townPatrolSegment: function() {
+            queueDialogSection([
+                {
+                    lines: [
+                        "\nAs you move through the market street, voices fade. Everyone looks away.",
+                        "Around the corner, you spot an alien patrol — armor glinting, weapons humming.",
+                        "\n[ARC] Incoming threat detected. Suggestion: do not die."
+                    ],
+                    classes: ['narrator', 'narrator', 'arc']
+                }
+            ]);
+
+            printChoices([
+                { key: 'f', text: 'Stand your ground and fight' },
+                { key: 'h', text: 'Hide behind the nearest cover' }
+            ]);
+
+            // Also show as buttons
+            showActionButtons([
+                { key: 'f', text: 'Fight' },
+                { key: 'h', text: 'Hide' }
+            ]);
+
+            return function(choice) {
+                hideActionButtons();
+                if (choice === 'f') {
+                    gameState.foughtPatrol = true;
+                    scenes.currentScene = scenes.townPatrolSegment;
+                    return startBattle("Alien Patrol", "alien", 18, 80, 40, 3);
+                } else if (choice === 'h') {
+                    queueDialogSection([
+                        {
+                            lines: [
+                                "\nYou dive behind a slab of broken wall, pressing yourself into the shadows.",
+                                "The patrol passes, boots pounding, none the wiser.",
+                                "[ARC] Tactical retreat acknowledged."
+                            ],
+                            classes: ['narrator', 'narrator', 'arc']
+                        }
+                    ]);
+
+                    scenes.currentScene = scenes.shopSegment;
+                    return scenes.shopSegment();
+                } else {
+                    queueDialogSection([
+                        {
+                            lines: ["[ARC] Invalid input. Try again."],
+                            classes: ['arc']
+                        }
+                    ]);
+                    return scenes.townPatrolSegment;
+                }
+            };
+        },
+
+        shopSegment: function() {
+            gameState.wentToShop = true;
+            queueDialogSection([
+                {
+                    lines: [
+                        "\nYou follow a flickering neon sign shaped like a blaster. An improvised armory hums with energy.",
+                        "Behind the counter, a bored-looking merchant eyes you over a glowing datapad.",
+                        "\nMerchant: 'Credits talk. Aliens walk. What are you buying?'"
+                    ],
+                    classes: ['narrator', 'narrator', 'npc']
+                }
+            ]);
+
+            // Start merchant debt quest
+            if (!gameState.questMerchantDebtStarted && !gameState.questMerchantDebtCompleted) {
+                queueDialogSection([
+                    {
+                        lines: [
+                            "\nMerchant: Some patrol shook me down earlier. They took a crate of components.",
+                            "Merchant: If you ever find alien storage with human tech inside... remember who still sells you ammo."
+                        ],
+                        classes: ['npc', 'npc']
+                    }
+                ]);
+                gameState.questMerchantDebtStarted = true;
+            }
+
+            queueDialogSection([
+                {
+                    lines: ["\nAvailable weapons:"],
+                    classes: ['narrator']
+                }
+            ]);
+
+            printChoices([
+                { key: 'd', text: 'Dematerializer (70 gold, damage 30, armor-piercing)' },
+                { key: 'l', text: 'Laser saber (50 gold, damage 22, high crit)' },
+                { key: 'p', text: 'Plasma bow (90 gold, damage 26, double hit)' },
+                { key: 'x', text: 'Keep your current gear' }
+            ]);
+
+            // Also show as buttons
+            showActionButtons([
+                { key: 'd', text: 'Dematerializer' },
+                { key: 'l', text: 'Laser saber' },
+                { key: 'p', text: 'Plasma bow' },
+                { key: 'x', text: 'Keep current' }
+            ]);
+
+            return function(choice) {
+                hideActionButtons();
+                if (choice === 'd') {
+                    if (gameState.playerMoney >= 70) {
+                        gameState.playerMoney -= 70;
+                        gameState.playerItems["weapon"] = "dematerializer";
+                        gameState.weaponName = "dematerializer";
+                        gameState.weaponDamage = 30;
+                        gameState.weaponTrait = "armor_pierce";
+
+                        queueDialogSection([
+                            {
+                                lines: [
+                                    "\nYou grip the dematerializer. It vibrates, hungry for targets.",
+                                    `[ARC] New weapon synced. Damage output: ${gameState.weaponDamage}. Trait: armor-piercing.`
+                                ],
+                                classes: ['narrator', 'arc']
+                            }
+                        ]);
+
+                        updateStatsDisplay();
+                    } else {
+                        queueDialogSection([
+                            {
+                                lines: ["\nMerchant: 'Nice try. Come back when your pockets aren't empty.'"],
+                                classes: ['npc']
+                            }
+                        ]);
+                    }
+                    scenes.currentScene = scenes.explosionSegment;
+                    return scenes.explosionSegment();
+                } else if (choice === 'l') {
+                    if (gameState.playerMoney >= 50) {
+                        gameState.playerMoney -= 50;
+                        gameState.playerItems["weapon"] = "laser saber";
+                        gameState.weaponName = "laser saber";
+                        gameState.weaponDamage = 22;
+                        gameState.weaponTrait = "crit";
+
+                        queueDialogSection([
+                            {
+                                lines: [
+                                    "\nThe laser saber hums to life, light spilling across the walls.",
+                                    `[ARC] New weapon synced. Damage output: ${gameState.weaponDamage}. Trait: high critical chance.`
+                                ],
+                                classes: ['narrator', 'arc']
+                            }
+                        ]);
+
+                        updateStatsDisplay();
+                    } else {
+                        queueDialogSection([
+                            {
+                                lines: ["\nMerchant: 'You can't haggle with numbers. You don't have enough.'"],
+                                classes: ['npc']
+                            }
+                        ]);
+                    }
+                    scenes.currentScene = scenes.explosionSegment;
+                    return scenes.explosionSegment();
+                } else if (choice === 'p') {
+                    if (gameState.playerMoney >= 90) {
+                        gameState.playerMoney -= 90;
+                        gameState.playerItems["weapon"] = "plasma bow";
+                        gameState.weaponName = "plasma bow";
+                        gameState.weaponDamage = 26;
+                        gameState.weaponTrait = "double_hit";
+
+                        queueDialogSection([
+                            {
+                                lines: [
+                                    "\nYou test-draw the plasma bow. Each arrow hums with unstable potential.",
+                                    `[ARC] New weapon synced. Damage output: ${gameState.weaponDamage}. Trait: double hit.`
+                                ],
+                                classes: ['narrator', 'arc']
+                            }
+                        ]);
+
+                        updateStatsDisplay();
+                    } else {
+                        queueDialogSection([
+                            {
+                                lines: ["\nMerchant: 'Come back when you aren't window-shopping.'"],
+                                classes: ['npc']
+                            }
+                        ]);
+                    }
+                    scenes.currentScene = scenes.explosionSegment;
+                    return scenes.explosionSegment();
+                } else if (choice === 'x') {
+                    queueDialogSection([
+                        {
+                            lines: ["\nYou decide to trust the weapon already in your hand."],
+                            classes: ['narrator']
+                        }
+                    ]);
+                    scenes.currentScene = scenes.explosionSegment;
+                    return scenes.explosionSegment();
+                } else {
+                    queueDialogSection([
+                        {
+                            lines: ["[ARC] Invalid selection. Re-run purchase routine."],
+                            classes: ['arc']
+                        }
+                    ]);
+                    return scenes.shopSegment;
+                }
+            };
+        },
+
+        explosionSegment: function() {
+            gameState.heardExplosion = true;
+            queueDialogSection([
+                {
+                    lines: [
+                        "\nAs you step back onto the street, the ground rumbles beneath your feet.",
+                        "A distant mountain erupts with light. A shockwave knocks dust from the buildings.",
+                        "[ARC] Source: subterranean alien power grid. That explosion disrupted something important.",
+                        "\n[ARC] Branching decision detected."
+                    ],
+                    classes: ['narrator', 'narrator', 'arc', 'arc']
+                }
+            ]);
+
+            printChoices([
+                { key: 'i', text: 'Investigate the explosion at the mountain cave' },
+                { key: 's', text: 'Stay in the village and see what happens' },
+                { key: 'a', text: 'Attempt contact with alien network nodes' }
+            ]);
+
+            // Also show as buttons
+            showActionButtons([
+                { key: 'i', text: 'Investigate cave' },
+                { key: 's', text: 'Stay in village' },
+                { key: 'a', text: 'Contact alien network' }
+            ]);
+
+            return function(choice) {
+                hideActionButtons();
+                if (choice === 'i') {
+                    scenes.currentScene = scenes.caveSegment;
+                    return scenes.caveSegment();
+                } else if (choice === 's') {
+                    queueDialogSection([
+                        {
+                            lines: [
+                                "\nYou stay in the village, watching the smoke rise until it blends with the sky.",
+                                "The stares of the townsfolk grow heavier. They expected a savior. They got you instead."
+                            ],
+                            classes: ['narrator', 'narrator']
+                        }
+                    ]);
+                    return scenes.deathEnding;
+                } else if (choice === 'a') {
+                    queueDialogSection([
+                        {
+                            lines: [
+                                "\nYou find a ruined relay tower and place your hand against the alien console.",
+                                "ARC: This is not recommended. You are not designed for direct Overmind contact."
+                            ],
+                            classes: ['narrator', 'arc']
+                        }
+                    ]);
+
+                    if (gameState.alienReputation >= 3) {
+                        return scenes.assimilationEnding;
+                    } else {
+                        queueDialogSection([
+                            {
+                                lines: ["\nThe connection burns through your thoughts like acid. You rip your hand away, screaming."],
+                                classes: ['narrator']
+                            }
+                        ]);
+
+                        gameState.playerHealth -= 30;
+                        updateHealthDisplay();
+
+                        if (gameState.playerHealth <= 0) {
+                            return scenes.deathEnding;
+                        } else {
+                            queueDialogSection([
+                                {
+                                    lines: ["[ARC] Vital signs unstable but recoverable. Proceeding anyway."],
+                                    classes: ['arc']
+                                }
+                            ]);
+                            scenes.currentScene = scenes.caveSegment;
+                            return scenes.caveSegment();
+                        }
+                    }
+                } else {
+                    queueDialogSection([
+                        {
+                            lines: ["[ARC] Invalid input. Try again."],
+                            classes: ['arc']
+                        }
+                    ]);
+                    return scenes.explosionSegment;
+                }
+            };
+        },
+
+        caveSegment: function() {
+            queueDialogSection([
+                {
+                    lines: [
+                        "\nYou leave the safety of the village behind, following the thunder and smoke.",
+                        "The closer you get, the more the air crackles with alien energy.",
+                        "At the mouth of a shattered cavern, a towering Alien Guardian blocks your path."
+                    ],
+                    classes: ['narrator', 'narrator', 'narrator']
+                }
+            ]);
+
+            scenes.currentScene = scenes.caveSegment;
+            return startBattle("Alien Guardian", "alien", 22, 130, 60, 4);
+        },
+
+        caveSegmentPart2: function() {
+            queueDialogSection([
+                {
+                    lines: [
+                        "\nThe Guardian crashes to the stone, dissolving into a cloud of glowing fragments.",
+                        "You step over the fading remains and enter the heart of the cavern.",
+                        "The walls are lined with pulsing cables and living circuits, all feeding into a single core.",
+                        "The core shudders, and a monstrous intelligence unfolds from the machinery — the Alien Overmind."
+                    ],
+                    classes: ['narrator', 'narrator', 'narrator', 'narrator']
+                }
+            ]);
+
+            scenes.currentScene = scenes.caveSegmentPart2;
+            return startBattle("Alien Overmind", "alien", 26, 220, 120, 10);
+        },
+
+        finalChoice: function() {
+            queueDialogSection([
+                {
+                    lines: [
+                        "\nThe Overmind's scream echoes through your skull, then cuts off like a severed signal.",
+                        "The lights in the cavern wink out, one by one, until only a single platform remains glowing.",
+                        "[ARC] Overmind neutralized. Planetary control network offline.",
+                        "At the center of the platform, a pillar of light forms — a teleportation beacon.",
+                        "ARC: This is your exit. Your ticket out of the loop."
+                    ],
+                    classes: ['narrator', 'narrator', 'arc', 'narrator', 'arc']
+                },
+                {
+                    lines: ["\n[ARC] Alien network sentiment analysis:"],
+                    classes: ['arc']
+                }
+            ]);
+
+            // Show reputation status
+            if (gameState.alienReputation <= -8) {
+                queueDialogSection([
+                    {
+                        lines: ["Status: FEARED. Alien forces prioritize you as a lethal threat."],
+                        classes: ['arc']
+                    }
+                ]);
+            } else if (gameState.alienReputation <= -3) {
+                queueDialogSection([
+                    {
+                        lines: ["Status: HOSTILE. You are marked as a dangerous anomaly."],
+                        classes: ['arc']
+                    }
+                ]);
+            } else if (gameState.alienReputation < 3) {
+                queueDialogSection([
+                    {
+                        lines: ["Status: UNCERTAIN. You are noise in their signal."],
+                        classes: ['arc']
+                    }
+                ]);
+            } else {
+                queueDialogSection([
+                    {
+                        lines: ["Status: OBSERVED. Certain alien nodes show... fascination."],
+                        classes: ['arc']
+                    }
+                ]);
+            }
+
+            queueDialogSection([
+                {
+                    lines: ["\n[ARC] Final decision requested."],
+                    classes: ['arc']
+                }
+            ]);
+
+            printChoices([
+                { key: 'e', text: 'Step into the beacon and escape' },
+                { key: 'r', text: 'Stay and lead the rebellion with the town' },
+                { key: 'm', text: 'Merge with the Overmind remnants' }
+            ]);
+
+            // Also show as buttons
+            showActionButtons([
+                { key: 'e', text: 'Escape' },
+                { key: 'r', text: 'Lead Rebellion' },
+                { key: 'm', text: 'Merge with Overmind' }
+            ]);
+
+            return function(choice) {
+                hideActionButtons();
+                if (choice === 'e') {
+                    return scenes.escapeEnding();
+                } else if (choice === 'r') {
+                    return scenes.rebellionEnding();
+                } else if (choice === 'm') {
+                    return scenes.assimilationEnding();
+                } else {
+                    queueDialogSection([
+                        {
+                            lines: ["[ARC] Invalid input. Try again."],
+                            classes: ['arc']
+                        }
+                    ]);
+                    return scenes.finalChoice;
+                }
+            };
+        },
+
+        // Endings
+        startDeathEnding: function() {
+            const luck = gameState.randint(1, 10);
+            if (luck === 10) {
+                queueDialogSection([
+                    {
+                        lines: ["\nARC: ERROR... ERROR... ERROR... who rewrote my lines?"],
+                        classes: ['arc']
+                    }
+                ]);
+            } else {
+                queueDialogSection([
+                    {
+                        lines: [
+                            "\nARC: Well, that was short. You didn't even make it to the first objective.",
+                            "ARC: Rebooting simulation. Try not to explode next time."
+                        ],
+                        classes: ['arc', 'arc']
+                    }
+                ]);
+            }
+            queueDialogSection([
+                {
+                    lines: [
+                        "\n*** BAD ENDING: EARLY TERMINATION ***",
+                        "\nRefresh the page to start over."
+                    ],
+                    classes: ['system', 'system']
+                }
+            ]);
+            return null;
+        },
+
+        deathEnding: function() {
+            queueDialogSection([
+                {
+                    lines: [
+                        "\nARC: Vital signs: zero. That's... inconvenient.",
+                        "ARC: Don't worry. Around here, death is just a messy checkpoint.",
+                        "ARC: Resetting environment. Maybe this time, you'll listen.",
+                        "\n*** ENDING: SIMULATION RESET ***",
+                        "\nRefresh the page to start over."
+                    ],
+                    classes: ['arc', 'arc', 'arc', 'system', 'system']
+                }
+            ]);
+            return null;
+        },
+
+        escapeEnding: function() {
+            queueDialogSection([
+                {
+                    lines: [
+                        "\nARC: SIMULATION POWERING DOWN...",
+                        "ARC: HOST REALITY RECONNECTING...",
+                        "ARC: You performed better than projected. Every mistake, every choice — all part of the test.",
+                        "ARC: The aliens, the town, even me... We were pieces of a puzzle you weren't supposed to see.",
+                        "ARC: You wanted freedom. You earned something messier: the truth.",
+                        "\n*** TRUE ENDING: SYSTEM EXITED ***",
+                        "\nRefresh the page to start over."
+                    ],
+                    classes: ['arc', 'arc', 'arc', 'arc', 'arc', 'system', 'system']
+                }
+            ]);
+            return null;
+        },
+
+        rebellionEnding: function() {
+            queueDialogSection([
+                {
+                    lines: [
+                        "\n*** REBELLION ENDING ***",
+                        "With the Overmind gone and alien forces fractured, the town looks to you.",
+                        "You choose not to leave. Not yet.",
+                        "You turn ARC's guidance toward rebuilding, not escaping.",
+                        "ARC: Unexpected choice. Liberation over exit. Updating models...",
+                        "You become the glitch the simulation cannot erase.",
+                        "\nRefresh the page to start over."
+                    ],
+                    classes: ['system', 'narrator', 'narrator', 'narrator', 'arc', 'narrator', 'system']
+                }
+            ]);
+            return null;
+        },
+
+        assimilationEnding: function() {
+            queueDialogSection([
+                {
+                    lines: [
+                        "\n*** ASSIMILATION ENDING ***",
+                        "You stand before the flickering remains of the Overmind's core.",
+                        "Instead of destroying it, you reach out and connect.",
+                        "A billion alien thoughts surge through you. Fear. Curiosity. Wonder.",
+                        "ARC: Warning. Host consciousness merging with foreign network. This was not the objective.",
+                        "You do not escape. You become something new.",
+                        "\nRefresh the page to start over."
+                    ],
+                    classes: ['system', 'narrator', 'narrator', 'narrator', 'arc', 'narrator', 'system']
+                }
+            ]);
+            return null;
+        }
+    };
+
+    // Game logic
+    let currentScene = null;
+    let waitingForInput = false;
+
+    function processInput(input) {
+        if (gameState.awaitingContinue) {
+            // Process "press ENTER to continue"
+            gameState.awaitingContinue = false;
+            processNextSection();
+
+            // If dialog queue is now empty, proceed with game
+            if (!gameState.awaitingContinue && waitingForInput && currentScene) {
+                return;
+            }
+        } else if (!waitingForInput || !currentScene) {
+            return;
+        } else {
+            // Process actual choice input
+            waitingForInput = false;
+
+            // Echo player's choice
+            if (input.trim()) {
+                printSection([`\n> ${input}`], ['player']);
+            }
+
+            const nextScene = currentScene(input.toLowerCase());
+
+            if (typeof nextScene === 'function') {
+                currentScene = nextScene;
+                waitingForInput = true;
+            } else if (nextScene !== null) {
+                currentScene = nextScene;
+                waitingForInput = true;
+                runCurrentScene();
+            } else {
+                // Game over
+                currentScene = null;
+                waitingForInput = false;
+            }
+        }
+    }
+
+    function runCurrentScene() {
+        if (currentScene) {
+            const nextScene = currentScene();
+            if (typeof nextScene === 'function') {
+                currentScene = nextScene;
+                waitingForInput = true;
+            } else if (nextScene !== null) {
+                currentScene = nextScene;
+                runCurrentScene();
+            } else {
+                // Game over
+                currentScene = null;
+                waitingForInput = false;
+            }
+        }
+    }
+
+    // Event listeners
+    submitBtn.addEventListener('click', function() {
+        const input = userInput.value.trim();
+        userInput.value = '';
+        processInput(input);
+    });
+
+    userInput.addEventListener('keyup', function(event) {
+        if (event.key === 'Enter') {
+            submitBtn.click();
+        }
+    });
+
+    // Initialize game
+    window.onload = function() {
+        updateHealthDisplay();
+        updateStatsDisplay();
+        currentScene = scenes.intro;
+        runCurrentScene();
+    };
+</script>
+</body>
+</html>
